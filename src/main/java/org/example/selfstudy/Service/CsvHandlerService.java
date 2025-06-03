@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.text.Normalizer;
 import java.util.*;
 
 @Service
@@ -31,13 +32,15 @@ public class CsvHandlerService {
     private final AuthorBookRepository authorBookRepository;
     private final CharacterRepository characterRepository;
     private final SettingRepository settingRepository;
+    private final FormatRepository formatRepository;
+    private final LanguageRepository languageRepository;
 
     List<BookCsvDto> bookCsvDtos = new ArrayList<>();
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public CsvHandlerService(BookService bookService, AwardService awardService, BookRepository bookRepository, AwardRepository awardRepository, AwardBookRepository awardBookRepository, AuthorRepository authorRepository, AuthorBookRepository authorBookRepository, ClientHttpRequestFactorySettings clientHttpRequestFactorySettings, CharacterRepository characterRepository, SettingRepository settingRepository) {
+    public CsvHandlerService(BookService bookService, AwardService awardService, BookRepository bookRepository, AwardRepository awardRepository, AwardBookRepository awardBookRepository, AuthorRepository authorRepository, AuthorBookRepository authorBookRepository, ClientHttpRequestFactorySettings clientHttpRequestFactorySettings, CharacterRepository characterRepository, SettingRepository settingRepository, FormatRepository formatRepository, LanguageRepository languageRepository) {
         this.bookService = bookService;
         this.awardService = awardService;
         this.bookRepository = bookRepository;
@@ -47,6 +50,8 @@ public class CsvHandlerService {
         this.authorBookRepository = authorBookRepository;
         this.characterRepository = characterRepository;
         this.settingRepository = settingRepository;
+        this.formatRepository = formatRepository;
+        this.languageRepository = languageRepository;
     }
 
 
@@ -88,14 +93,48 @@ public class CsvHandlerService {
         List<AuthorBook> authorBooks = new ArrayList<>();
         List<Character> characterList = new ArrayList<>();
         List<Setting> settingList = new ArrayList<>();
-
+//        Set<Format> formats = new HashSet<>();
+        List<Format> formats = new ArrayList<>();
+        List<Language> languages = new ArrayList<>();
 
         Map<String, Author> authorCache = new HashMap<>();
         Map<String, Award> awardCache = new HashMap<>();
+        Map<String, Format> formatCache = new HashMap<>();
+        Map<String, Language> languageCache = new HashMap<>();
 
         for (BookCsvDto dto : dtos) {
             Book book = bookService.convertToEntity(dto);
             books.add(book);
+
+            // Handle Format
+            String formatName = dto.getBookFormat();
+            if (formatName != null && !formatName.isBlank()) {
+                formatName = formatName.toUpperCase();
+                if (formatCache.containsKey(formatName)) {
+                    book.setFormat(formatCache.get(formatName));
+                } else {
+                    Format f = new Format();
+                    f.setName(formatName);
+                    formatCache.put(formatName, f);
+                    formats.add(f);
+                    book.setFormat(f);
+                }
+            }
+
+            // Handle Language
+            String languageName = dto.getLanguage();
+            if (languageName != null && !languageName.isBlank()) {
+                languageName = languageName.toUpperCase();
+                if (languageCache.containsKey(languageName)) {
+                    book.setLanguage(languageCache.get(languageName));
+                } else {
+                    Language l = new Language();
+                    l.setName(languageName);
+                    languageCache.put(languageName, l);
+                    languages.add(l);
+                    book.setLanguage(l);
+                }
+            }
 
             // Handle Awards
             for (String raw : HelperFunc.getList(dto.getAwards())) {
@@ -166,7 +205,7 @@ public class CsvHandlerService {
             }
 
             if (books.size() >= BATCH_SIZE) {
-                saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList);
+                saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList, formats, languages);
 
                 books.clear();
                 awards.clear();
@@ -175,18 +214,23 @@ public class CsvHandlerService {
                 authorBooks.clear();
                 settingList.clear();
                 characterList.clear();
+                formats.clear();
+                languages.clear();
             }
         }
 
-        saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList);
+        saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList, formats, languages);
     }
 
     @Transactional
     protected void saveBatch(List<Book> books, List<Award> awards, List<AwardBook> awardBooks,
-                             List<Author> authors, List<AuthorBook> authorBooks, List<Setting> settings, List<Character> characters) {
+                             List<Author> authors, List<AuthorBook> authorBooks, List<Setting> settings,
+                             List<Character> characters, List<Format> formats, List<Language> languages) {
 
         awardRepository.saveAll(awards);
         authorRepository.saveAll(authors);
+        formatRepository.saveAll(formats);
+        languageRepository.saveAll(languages);
         bookRepository.saveAll(books);
         awardBookRepository.saveAll(awardBooks);
         authorBookRepository.saveAll(authorBooks);

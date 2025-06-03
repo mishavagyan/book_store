@@ -27,6 +27,7 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.yaml.snakeyaml.tokens.FlowSequenceEndToken;
 
 import java.util.*;
 
@@ -53,6 +54,12 @@ public class Book {
     private Long bbeScore;
     private Long bbeVotes;
     private String price;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Format format;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Language language;
 
     @OneToMany(mappedBy = "book")
     @JsonManagedReference("book-awards")
