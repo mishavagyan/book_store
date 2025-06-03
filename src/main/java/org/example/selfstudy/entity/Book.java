@@ -78,4 +78,8 @@ public class Book {
 //    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL)
     @JsonManagedReference
     private List<Character> characters = new ArrayList<>();
+
+    @OneToMany(mappedBy = "book")
+    @JsonManagedReference("book-genres")
+    private List<GenreBook> genres = new ArrayList<>();
 }

@@ -25,6 +25,7 @@ public class CsvHandlerService {
 
     private final BookService bookService;
     private final AwardService awardService;
+
     private final BookRepository bookRepository;
     private final AwardRepository awardRepository;
     private final AwardBookRepository awardBookRepository;
@@ -34,13 +35,15 @@ public class CsvHandlerService {
     private final SettingRepository settingRepository;
     private final FormatRepository formatRepository;
     private final LanguageRepository languageRepository;
+    private final GenreRepository genreRepository;
+    private final GenreBookRepository genreBookRepository;
 
     List<BookCsvDto> bookCsvDtos = new ArrayList<>();
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public CsvHandlerService(BookService bookService, AwardService awardService, BookRepository bookRepository, AwardRepository awardRepository, AwardBookRepository awardBookRepository, AuthorRepository authorRepository, AuthorBookRepository authorBookRepository, ClientHttpRequestFactorySettings clientHttpRequestFactorySettings, CharacterRepository characterRepository, SettingRepository settingRepository, FormatRepository formatRepository, LanguageRepository languageRepository) {
+    public CsvHandlerService(BookService bookService, AwardService awardService, BookRepository bookRepository, AwardRepository awardRepository, AwardBookRepository awardBookRepository, AuthorRepository authorRepository, AuthorBookRepository authorBookRepository, ClientHttpRequestFactorySettings clientHttpRequestFactorySettings, CharacterRepository characterRepository, SettingRepository settingRepository, FormatRepository formatRepository, LanguageRepository languageRepository, GenreRepository genreRepository, GenreBookRepository genreBookRepository) {
         this.bookService = bookService;
         this.awardService = awardService;
         this.bookRepository = bookRepository;
@@ -52,6 +55,8 @@ public class CsvHandlerService {
         this.settingRepository = settingRepository;
         this.formatRepository = formatRepository;
         this.languageRepository = languageRepository;
+        this.genreRepository = genreRepository;
+        this.genreBookRepository = genreBookRepository;
     }
 
 
@@ -96,9 +101,12 @@ public class CsvHandlerService {
 //        Set<Format> formats = new HashSet<>();
         List<Format> formats = new ArrayList<>();
         List<Language> languages = new ArrayList<>();
+        List<Genre> genres = new ArrayList<>();
+        List<GenreBook> genreBooks = new ArrayList<>();
 
         Map<String, Author> authorCache = new HashMap<>();
         Map<String, Award> awardCache = new HashMap<>();
+        Map<String, Genre> genreCache = new HashMap<>();
         Map<String, Format> formatCache = new HashMap<>();
         Map<String, Language> languageCache = new HashMap<>();
 
@@ -182,6 +190,26 @@ public class CsvHandlerService {
                 authorBooks.add(ab);
             }
 
+            // Handle Genres
+            for (String s : HelperFunc.getList(dto.getGenres())) {
+                if (s == null || s.isBlank()) continue;
+
+                Genre genre = genreCache.computeIfAbsent(s, k-> {
+                    Genre newGenre = new Genre();
+                    newGenre.setName(k);
+                    genres.add(newGenre);
+                    return newGenre;
+                });
+
+                GenreBook gb = new GenreBook();
+                gb.setGenre(genre);
+                gb.setBook(book);
+
+                book.getGenres().add(gb);
+                genre.getBooks().add(gb);
+                genreBooks.add(gb);
+            }
+
             // Handle Settings
             for (String s : HelperFunc.getList(dto.getSetting())) {
                 if (s == null || s.isBlank()) continue;
@@ -205,13 +233,19 @@ public class CsvHandlerService {
             }
 
             if (books.size() >= BATCH_SIZE) {
-                saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList, formats, languages);
+                saveBatch(
+                        books, awards, awardBooks,
+                        authors, authorBooks, settingList,
+                        characterList, formats, languages,
+                        genres, genreBooks);
 
                 books.clear();
                 awards.clear();
                 awardBooks.clear();
                 authors.clear();
                 authorBooks.clear();
+                genreBooks.clear();
+                genres.clear();
                 settingList.clear();
                 characterList.clear();
                 formats.clear();
@@ -219,21 +253,28 @@ public class CsvHandlerService {
             }
         }
 
-        saveBatch(books, awards, awardBooks, authors, authorBooks, settingList, characterList, formats, languages);
+        saveBatch(
+                books, awards, awardBooks,
+                authors, authorBooks, settingList,
+                characterList, formats, languages,
+                genres, genreBooks);
     }
 
     @Transactional
     protected void saveBatch(List<Book> books, List<Award> awards, List<AwardBook> awardBooks,
                              List<Author> authors, List<AuthorBook> authorBooks, List<Setting> settings,
-                             List<Character> characters, List<Format> formats, List<Language> languages) {
+                             List<Character> characters, List<Format> formats, List<Language> languages,
+                             List<Genre> genres, List<GenreBook> genreBooks) {
 
         awardRepository.saveAll(awards);
         authorRepository.saveAll(authors);
+        genreRepository.saveAll(genres);
         formatRepository.saveAll(formats);
         languageRepository.saveAll(languages);
         bookRepository.saveAll(books);
         awardBookRepository.saveAll(awardBooks);
         authorBookRepository.saveAll(authorBooks);
+        genreBookRepository.saveAll(genreBooks);
         settingRepository.saveAll(settings);
         characterRepository.saveAll(characters);
 
